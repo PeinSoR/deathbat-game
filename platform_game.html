@@ -75,7 +75,8 @@ canvas {
     Controles:
     <span class="key">←</span>
     <span class="key">→</span> Moverse |
-    <span class="key">Espacio</span> Saltar
+    <span class="key">Espacio</span> Saltar |
+    <a> 2 <span class="key">Espacio</span> Doble Salto </a>
   </div>
 </div>
 
@@ -113,16 +114,18 @@ const player = {
   jumpPower: 12,
   direction: 1,
   onGround: false,
-  state: "idle"
+  state: "idle",
+  jumpCount: 0,
+  maxJumps: 2
 };
 
-const gravity = 0.6;
+const gravity = 0.5;
 
 // Animaciones
 const animations = {
   idle: { start: 3, end: 3 },
   run: { start: 1, end: 7 },
-  jump: { start: 1, end: 9 }
+  jump: { start: 1, end: 7 }
 };
 
 let frame = 0;
@@ -132,7 +135,7 @@ const frameSpeed = 5;
 const FRAME_WIDTH = 48;
 const FRAME_HEIGHT = 48;
 
-// Plataformas dinámicas
+// Plataformas
 let plataformas = [];
 let suelo = [];
 
@@ -145,8 +148,16 @@ const GROUND_SEGMENT_WIDTH = 300;
 
 // Teclado
 const keys = {};
-document.addEventListener("keydown", e => keys[e.code] = true);
-document.addEventListener("keyup", e => keys[e.code] = false);
+let canJump = true;
+
+document.addEventListener("keydown", e => {
+  if (!keys[e.code]) keys[e.code] = true;
+});
+
+document.addEventListener("keyup", e => {
+  keys[e.code] = false;
+  if (e.code === "Space") canJump = true;
+});
 
 function generarSueloHasta(xObjetivo) {
   while (lastGroundX < xObjetivo) {
@@ -175,7 +186,23 @@ function generarPlataforma() {
 
   const x = lastPlatformX + gap;
 
-  plataformas.push({ x, y, w: width, h: height });
+  // 🔽 Margen para reducir hitbox
+  const marginX = 20;
+  const marginY = 10;
+
+  plataformas.push({
+    x: x + marginX,
+    y: y + marginY,
+    w: width - marginX * 2,
+    h: height - marginY * 2,
+
+    // opcional: guardar tamaño real para dibujar
+    drawX: x,
+    drawY: y,
+    drawW: width,
+    drawH: height
+  });
+
   lastPlatformX = x + width;
 }
 
@@ -221,9 +248,12 @@ function update() {
     player.direction = -1;
   }
 
-  if (keys["Space"] && player.onGround) {
+  // DOBLE SALTO
+  if (keys["Space"] && canJump && player.jumpCount < player.maxJumps) {
     player.velY = -player.jumpPower;
+    player.jumpCount++;
     player.onGround = false;
+    canJump = false;
   }
 
   const prevY = player.y;
@@ -241,7 +271,6 @@ function update() {
       player.y < p.y + p.h &&
       player.y + player.h > p.y
     ) {
-      // Colisión SOLO desde arriba
       if (
         prevY + player.h <= p.y &&
         player.y + player.h >= p.y
@@ -249,6 +278,7 @@ function update() {
         player.y = p.y - player.h;
         player.velY = 0;
         player.onGround = true;
+        player.jumpCount = 0;
       }
     }
   });
@@ -268,6 +298,7 @@ function resetGame() {
   player.y = 100;
   player.velX = 0;
   player.velY = 0;
+  player.jumpCount = 0;
   plataformas = [];
   suelo = [];
   lastPlatformX = 0;
