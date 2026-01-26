@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Deathbat Game</title>
+
+<style>
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #1e0000;
+  font-family: Arial, sans-serif;
+  color: white;
+  display: flex;
+  justify-content: center;
+}
+
+#main-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 30px;
+  gap: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 36px;
+  color: #ffffff;
+  text-shadow: 0 0 25px rgba(225, 201, 19, 0.4);
+}
+
+#game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+canvas {
+  background: black;
+  border-radius: 12px;
+  border: 3px solid #ffd000;
+  box-shadow: 0 0 25px rgba(225, 201, 19, 0.4);
+}
+
+#controls {
+  background: rgba(0,0,0,0.6);
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.key {
+  background: #1e293b;
+  border: 1px solid #38bdf8;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: 0 2px;
+  font-family: monospace;
+}
+</style>
+</head>
+
+<body>
+
+<div id="main-container">
+
+<h1>Deathbat Game!</h1>
+
+<div id="game-container">
+  <canvas id="game"></canvas>
+
+  <div id="controls">
+    Controles:
+    <span class="key">←</span>
+    <span class="key">→</span> Moverse |
+    <span class="key">Espacio</span> Saltar
+  </div>
+</div>
+
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 900;
+canvas.height = 500;
+
+// Imágenes
+const playerImg = new Image();
+playerImg.src = "assets/ninio.png";
+
+const fondoImg = new Image();
+fondoImg.src = "assets/fondo.jpg";
+
+const plataformaImg = new Image();
+plataformaImg.src = "assets/plataforma.png";
+
+// Cámara
+const camera = { x: 0 };
+
+// Jugador
+const player = {
+  x: 100,
+  y: 100,
+  w: 48,
+  h: 48,
+  velX: 0,
+  velY: 0,
+  speed: 4,
+  jumpPower: 12,
+  direction: 1,
+  onGround: false,
+  state: "idle"
+};
+
+const gravity = 0.6;
+
+// Animaciones
+const animations = {
+  idle: { start: 3, end: 3 },
+  run: { start: 1, end: 7 },
+  jump: { start: 1, end: 9 }
+};
+
+let frame = 0;
+let frameTimer = 0;
+const frameSpeed = 5;
+
+const FRAME_WIDTH = 48;
+const FRAME_HEIGHT = 48;
+
+// Plataformas dinámicas
+let plataformas = [];
+let suelo = [];
+
+let lastPlatformX = 0;
+let lastGroundX = 0;
+
+const GROUND_Y = 450;
+const GROUND_HEIGHT = 50;
+const GROUND_SEGMENT_WIDTH = 300;
+
+// Teclado
+const keys = {};
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
+
+function generarSueloHasta(xObjetivo) {
+  while (lastGroundX < xObjetivo) {
+    suelo.push({
+      x: lastGroundX,
+      y: GROUND_Y,
+      w: GROUND_SEGMENT_WIDTH,
+      h: GROUND_HEIGHT
+    });
+    lastGroundX += GROUND_SEGMENT_WIDTH;
+  }
+}
+
+function generarPlataforma() {
+  const gapMin = 120;
+  const gapMax = 260;
+  const gap = gapMin + Math.random() * (gapMax - gapMin);
+
+  const SCALE = 0.25;
+  const width = 422 * SCALE;
+  const height = 252 * SCALE;
+
+  const minY = 220;
+  const maxY = 360;
+  const y = minY + Math.random() * (maxY - minY);
+
+  const x = lastPlatformX + gap;
+
+  plataformas.push({ x, y, w: width, h: height });
+  lastPlatformX = x + width;
+}
+
+function updatePlataformas() {
+  const limiteGeneracion = camera.x + canvas.width * 2;
+
+  generarSueloHasta(limiteGeneracion);
+
+  while (lastPlatformX < limiteGeneracion) {
+    generarPlataforma();
+  }
+
+  plataformas = plataformas.filter(p => p.x + p.w > camera.x - 300);
+  suelo = suelo.filter(s => s.x + s.w > camera.x - 600);
+}
+
+function updateState() {
+  if (!player.onGround) player.state = "jump";
+  else if (player.velX !== 0) player.state = "run";
+  else player.state = "idle";
+}
+
+function updateAnimation() {
+  const anim = animations[player.state];
+
+  frameTimer++;
+  if (frameTimer >= frameSpeed) {
+    frame++;
+    if (frame > anim.end) frame = anim.start;
+    frameTimer = 0;
+  }
+}
+
+function update() {
+  player.velX = 0;
+
+  if (keys["ArrowRight"]) {
+    player.velX = player.speed;
+    player.direction = 1;
+  }
+  if (keys["ArrowLeft"]) {
+    player.velX = -player.speed;
+    player.direction = -1;
+  }
+
+  if (keys["Space"] && player.onGround) {
+    player.velY = -player.jumpPower;
+    player.onGround = false;
+  }
+
+  const prevY = player.y;
+
+  player.velY += gravity;
+  player.x += player.velX;
+  player.y += player.velY;
+
+  player.onGround = false;
+
+  [...plataformas, ...suelo].forEach(p => {
+    if (
+      player.x < p.x + p.w &&
+      player.x + player.w > p.x &&
+      player.y < p.y + p.h &&
+      player.y + player.h > p.y
+    ) {
+      // Colisión SOLO desde arriba
+      if (
+        prevY + player.h <= p.y &&
+        player.y + player.h >= p.y
+      ) {
+        player.y = p.y - player.h;
+        player.velY = 0;
+        player.onGround = true;
+      }
+    }
+  });
+
+  if (player.y > canvas.height + 200) resetGame();
+
+  camera.x = player.x - canvas.width / 2;
+  if (camera.x < 0) camera.x = 0;
+
+  updateState();
+  updateAnimation();
+  updatePlataformas();
+}
+
+function resetGame() {
+  player.x = 100;
+  player.y = 100;
+  player.velX = 0;
+  player.velY = 0;
+  plataformas = [];
+  suelo = [];
+  lastPlatformX = 0;
+  lastGroundX = 0;
+  camera.x = 0;
+}
+
+function drawFondo() {
+  const speed = 0.3;
+  const offset = (camera.x * speed) % fondoImg.width;
+
+  for (let x = -offset; x < canvas.width; x += fondoImg.width) {
+    ctx.drawImage(fondoImg, x, 0, fondoImg.width, canvas.height);
+  }
+}
+
+function drawPlayer() {
+  ctx.save();
+  ctx.translate(player.x - camera.x + player.w/2, player.y + player.h/2);
+  ctx.scale(player.direction, 1);
+
+  ctx.drawImage(
+    playerImg,
+    frame * FRAME_WIDTH, 0,
+    FRAME_WIDTH, FRAME_HEIGHT,
+    -player.w/2, -player.h/2,
+    player.w, player.h
+  );
+
+  ctx.restore();
+}
+
+function draw() {
+  drawFondo();
+
+  plataformas.forEach(p => {
+    ctx.drawImage(plataformaImg, p.x - camera.x, p.y, p.w, p.h);
+  });
+
+  drawPlayer();
+}
+
+function loop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+fondoImg.onload = () => loop();
+</script>
+
+</body>
+</html>

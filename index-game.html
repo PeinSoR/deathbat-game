@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Juego de Plataforma</title>
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: black;
+    }
+
+    canvas {
+        display: block;
+        background-image: url("assets/fondo.gif");
+        background-size: cover;
+    }
+
+    #gameOver {
+        position: absolute;
+        top: 40%;
+        width: 100%;
+        text-align: center;
+        font-size: 40px;
+        color: red;
+        font-family: Arial;
+        display: none;
+    }
+</style>
+</head>
+<body>
+
+<div id="gameOver">Has perdido, el erizo te ha picado</div>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Cargar imágenes
+const imgPlayer = new Image();
+imgPlayer.src = "assets/personaje.gif";
+
+const imgEnemy = new Image();
+imgEnemy.src = "assets/erizo.gif";
+
+// Jugador
+const player = {
+    x: 100,
+    y: 0,
+    width: 60,
+    height: 60,
+    velX: 0,
+    velY: 0,
+    speed: 6,
+    jumping: false,
+    direction: 1
+};
+
+// Plataformas
+let platforms = [
+    {x: 0, y: canvas.height - 80, width: 5000, height: 80}
+];
+
+// Enemigos
+let enemies = [];
+
+let gravity = 0.7;
+let keys = {};
+let gameOver = false;
+
+// Controles
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
+
+// Crear enemigos
+function spawnEnemy() {
+    enemies.push({
+        x: canvas.width + Math.random() * 500,
+        y: canvas.height - 140,
+        width: 50,
+        height: 50,
+        speed: 3
+    });
+}
+
+setInterval(spawnEnemy, 2000);
+
+// Colisiones
+function collision(a, b) {
+    return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+    );
+}
+
+// Loop principal
+function update() {
+    if (gameOver) return;
+
+    // Movimiento
+    if (keys["ArrowRight"]) {
+        player.velX = player.speed;
+        player.direction = 1;
+    }
+    else if (keys["ArrowLeft"]) {
+        player.velX = -player.speed;
+        player.direction = -1;
+    }
+    else {
+        player.velX = 0;
+    }
+
+    if (keys["Space"] && !player.jumping) {
+        player.velY = -15;
+        player.jumping = true;
+    }
+
+    player.velY += gravity;
+    player.x += player.velX;
+    player.y += player.velY;
+
+    // Plataformas
+    platforms.forEach(p => {
+        if (collision(player, p)) {
+            if (player.velY > 0) {
+                player.y = p.y - player.height;
+                player.velY = 0;
+                player.jumping = false;
+            }
+        }
+    });
+
+    // Mundo infinito (crear nuevas plataformas)
+    let lastPlatform = platforms[platforms.length - 1];
+    if (lastPlatform.x + lastPlatform.width - player.x < canvas.width) {
+        platforms.push({
+            x: lastPlatform.x + lastPlatform.width + 200,
+            y: canvas.height - 80 - Math.random() * 200,
+            width: 400,
+            height: 80
+        });
+    }
+
+    // Enemigos
+    enemies.forEach((enemy, index) => {
+        enemy.x -= enemy.speed;
+
+        // Saltar encima
+        if (collision(player, enemy)) {
+            if (player.velY > 0 && player.y + player.height - enemy.y < 20) {
+                enemies.splice(index, 1);
+                player.velY = -10;
+            } else {
+                endGame();
+            }
+        }
+    });
+
+    draw();
+    requestAnimationFrame(update);
+}
+
+// Dibujar
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Cámara
+    ctx.save();
+    ctx.translate(-player.x + 150, 0);
+
+    // Plataformas
+    ctx.fillStyle = "#654321";
+    platforms.forEach(p => {
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+    });
+
+    // Enemigos
+    enemies.forEach(e => {
+        ctx.drawImage(imgEnemy, e.x, e.y, e.width, e.height);
+    });
+
+    // Jugador (volteo)
+    ctx.save();
+    ctx.translate(player.x + player.width/2, player.y);
+    ctx.scale(player.direction, 1);
+    ctx.drawImage(imgPlayer, -player.width/2, 0, player.width, player.height);
+    ctx.restore();
+
+    ctx.restore();
+}
+
+// Game over
+function endGame() {
+    gameOver = true;
+    document.getElementById("gameOver").style.display = "block";
+}
+
+update();
+</script>
+
+</body>
+</html>
