@@ -186,23 +186,7 @@ function generarPlataforma() {
 
   const x = lastPlatformX + gap;
 
-  // 🔽 Margen para reducir hitbox
-  const marginX = 20;
-  const marginY = 10;
-
-  plataformas.push({
-    x: x + marginX,
-    y: y + marginY,
-    w: width - marginX * 2,
-    h: height - marginY * 2,
-
-    // opcional: guardar tamaño real para dibujar
-    drawX: x,
-    drawY: y,
-    drawW: width,
-    drawH: height
-  });
-
+  plataformas.push({ x, y, w: width, h: height });
   lastPlatformX = x + width;
 }
 
