@@ -94,7 +94,7 @@ const playerImg = new Image();
 playerImg.src = "assets/ninio.png";
 
 const fondoImg = new Image();
-fondoImg.src = "assets/fondo.jpg";
+fondoImg.src = "assets/fondo.png";
 
 const plataformaImg = new Image();
 plataformaImg.src = "assets/plataforma.png";
@@ -108,6 +108,7 @@ const camera = { x: 0 };
 // Contador
 let score = 0;
 let bestScore = 0;
+let distanceScore = 0;
 
 // Jugador
 const player = {
@@ -220,7 +221,8 @@ function generarEnemigo() {
 
       state: "walk",
       frame: enemyAnimations["walk"].start,
-      frameTimer: 0
+      frameTimer: 0,
+      dead: false
     });
   }
 }
@@ -327,7 +329,8 @@ function update() {
   if (camera.x < 0) camera.x = 0;
 
   // Score  por distancia
-  score = Math.max(score, Math.floor(player.x / 500));
+  distanceScore = Math.max(score, Math.floor(player.x / 500));
+  score = distanceScore;
 
   generarEnemigo();
   enemigos.forEach(enemigo => {
@@ -338,8 +341,17 @@ function update() {
 
     // Colision
     if (colision(player, enemigo)) {
-      enemigo.state = "attack";
-      perder();
+      const playerBottom = player.y + player.h;
+      const enemyTop = enemigo.y;
+      if(player.velY > 0 && playerBottom - player.velY <= enemyTop + 10){
+        // El jugador salta sobre el enemigo
+        enemigo.dead = true;
+        player.velY = -player.jumpPower / 2; // Rebote al saltar sobre el enemigo
+        score += 10;
+      }else{
+        enemigo.state = "attack";
+        perder();
+    }
     }
 
     // Animación
@@ -352,7 +364,7 @@ function update() {
       enemigo.frameTimer = 0;
     }
   });
-  enemigos = enemigos.filter(e => e.x + e.w > camera.x - 200);  
+  enemigos = enemigos.filter(e => !e.dead && e.x + e.w > camera.x - 200);  
 
   updateState();
   updateAnimation();
@@ -375,6 +387,7 @@ function resetGame() {
   for (let k in keys) delete keys[k];
   bestScore = Math.max(bestScore, score);
   score = 0;
+  distanceScore = 0;
 }
 
 function drawFondo() {
