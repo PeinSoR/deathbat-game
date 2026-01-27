@@ -102,6 +102,9 @@ plataformaImg.src = "assets/plataforma.png";
 const enemigoImg = new Image();
 enemigoImg.src = "assets/enemigos.png";
 
+const vidaImg = new Image();
+vidaImg.src = "assets/vida.png";
+
 // Cámara
 const camera = { x: 0 };
 
@@ -109,6 +112,15 @@ const camera = { x: 0 };
 let score = 0;
 let bestScore = 0;
 let distanceScore = 0;
+
+// Vida
+let vidas = 3;
+const MAX_VIDAS = 3;
+
+// Respawn
+let invencible = false;
+let invencibleTimer = 0;
+const INVENCIBLE_TIME = 120;
 
 // Jugador
 const player = {
@@ -152,8 +164,8 @@ let suelo = [];
 let lastPlatformX = 0;
 let lastGroundX = 0;
 
-const GROUND_Y = 450;
-const GROUND_HEIGHT = 50;
+const GROUND_Y = 480;
+const GROUND_HEIGHT = 40;
 const GROUND_SEGMENT_WIDTH = 300;
 
 // Enemigos
@@ -211,7 +223,7 @@ function generarPlataforma() {
 }
 
 function generarEnemigo() {
-  if (Math.random() < 0.01) {
+  if (Math.random() < 0.009) {
     enemigos.push({
       x: camera.x + canvas.width + 50,
       y: GROUND_Y - ENEMY_HEIGHT,
@@ -261,12 +273,26 @@ function colision(a, b) {
 }
 
 function perder() {
-  gameOver = true;
+  if (gameOver) return;
+
+  vidas--;
+
+  if (vidas <= 0) {
+    gameOver = true;
     setTimeout(() => {
-    alert("Has perdido");
-    resetGame();
-    }, 
-  100);
+      alert("Se te han acabado las vidas! Tu puntuación final es: " + score);
+      resetGame();
+    }, 100);
+  } else {
+    // Respawn
+    player.x -= 80;
+    player.y = 100;
+    player.velX = 0;
+    player.velY = 0;
+
+    invencible = true;
+    invencibleTimer = INVENCIBLE_TIME;
+  }
 }
 
 function updateState() {
@@ -278,7 +304,14 @@ function updateState() {
 
 function update() {
   if (gameOver) return;
-  player.velX = 0;
+    player.velX = 0;
+
+  if (invencible) {
+    invencibleTimer--;
+  if (invencibleTimer <= 0) {
+    invencible = false;
+  }
+}
 
   // MOVIMIENTO HORIZONTAL
   if (keys["ArrowRight"]) {
@@ -349,8 +382,10 @@ function update() {
         player.velY = -player.jumpPower / 2; // Rebote al saltar sobre el enemigo
         score += 10;
       }else{
+        if (!invencible) {
         enemigo.state = "attack";
         perder();
+}
     }
     }
 
@@ -388,6 +423,9 @@ function resetGame() {
   bestScore = Math.max(bestScore, score);
   score = 0;
   distanceScore = 0;
+  vidas = MAX_VIDAS;
+  invencible = false;
+  invencibleTimer = 0;
 }
 
 function drawFondo() {
@@ -403,6 +441,12 @@ function drawPlayer() {
   ctx.save();
   ctx.translate(player.x - camera.x + player.w/2, player.y + player.h/2);
   ctx.scale(player.direction, 1);
+
+  // Parpadeo si es invencible
+  if (invencible && Math.floor(invencibleTimer / 5) % 2 === 0) {
+    ctx.restore();
+    return;
+  }
 
   ctx.drawImage(
     playerImg,
@@ -437,6 +481,21 @@ function drawScore() {
   ctx.fillText(`Mejor Puntuación: ${bestScore}`, 20, 60);
 }
 
+function drawLives() {
+  const size = 28;
+  const margin = 10;
+
+  for (let i = 0; i < vidas; i++) {
+    ctx.drawImage(
+      vidaImg,
+      canvas.width - (i + 1) * (size + margin),
+      15,
+      size,
+      size
+    );
+  }
+}
+
 function draw() {
   drawFondo();
 
@@ -446,6 +505,7 @@ function draw() {
   drawEnemies();
   drawPlayer();
   drawScore();
+  drawLives();
 }
 
 function loop() {
