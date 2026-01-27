@@ -89,7 +89,7 @@ const ctx = canvas.getContext("2d");
 canvas.width = 900;
 canvas.height = 500;
 
-// Imágenes
+// Imágenes en assets
 const playerImg = new Image();
 playerImg.src = "assets/ninio.png";
 
@@ -99,19 +99,22 @@ fondoImg.src = "assets/fondo.jpg";
 const plataformaImg = new Image();
 plataformaImg.src = "assets/plataforma.png";
 
+const enemigoImg = new Image();
+enemigoImg.src = "assets/enemigos.png";
+
 // Cámara
 const camera = { x: 0 };
 
+// Contador
+let score = 0;
+let bestScore = 0;
+
 // Jugador
 const player = {
-  x: 100,
-  y: 100,
-  w: 48,
-  h: 48,
-  velX: 0,
-  velY: 0,
-  speed: 4,
-  jumpPower: 12,
+  x: 100, y: 100,
+  w: 48, h: 48,
+  velX: 0, velY: 0,
+  speed: 4, jumpPower: 12,
   direction: 1,
   onGround: false,
   state: "idle",
@@ -121,13 +124,19 @@ const player = {
 
 const gravity = 0.5;
 
-// Animaciones
+// Animaciones jugador
 const animations = {
   idle: { start: 3, end: 3 },
   run: { start: 1, end: 7 },
   jump: { start: 1, end: 7 }
 };
 
+// Animaciones enemigos
+const enemyAnimations = {
+  walk:   { start: 0, end: 15 },
+  idle:   { start: 16, end: 25 },
+  attack: { start: 26, end: 40 }
+};
 let frame = 0;
 let frameTimer = 0;
 const frameSpeed = 5;
@@ -145,6 +154,16 @@ let lastGroundX = 0;
 const GROUND_Y = 450;
 const GROUND_HEIGHT = 50;
 const GROUND_SEGMENT_WIDTH = 300;
+
+// Enemigos
+let enemigos = [];
+const ENEMY_FRAMES = 41;
+const ENEMY_WIDTH = 48;
+const ENEMY_HEIGHT = 48;
+
+
+// Estado del juego
+let gameOver = false;
 
 // Teclado
 const keys = {};
@@ -190,6 +209,22 @@ function generarPlataforma() {
   lastPlatformX = x + width;
 }
 
+function generarEnemigo() {
+  if (Math.random() < 0.01) {
+    enemigos.push({
+      x: camera.x + canvas.width + 50,
+      y: GROUND_Y - ENEMY_HEIGHT,
+      w: ENEMY_WIDTH,
+      h: ENEMY_HEIGHT,
+      speed: 2,
+
+      state: "walk",
+      frame: enemyAnimations["walk"].start,
+      frameTimer: 0
+    });
+  }
+}
+
 function updatePlataformas() {
   const limiteGeneracion = camera.x + canvas.width * 2;
 
@@ -203,12 +238,6 @@ function updatePlataformas() {
   suelo = suelo.filter(s => s.x + s.w > camera.x - 600);
 }
 
-function updateState() {
-  if (!player.onGround) player.state = "jump";
-  else if (player.velX !== 0) player.state = "run";
-  else player.state = "idle";
-}
-
 function updateAnimation() {
   const anim = animations[player.state];
 
@@ -220,9 +249,36 @@ function updateAnimation() {
   }
 }
 
+function colision(a, b) {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
+
+function perder() {
+  gameOver = true;
+    setTimeout(() => {
+    alert("Has perdido");
+    resetGame();
+    }, 
+  100);
+}
+
+function updateState() {
+  if (!player.onGround) player.state = "jump";
+  else if (player.velX !== 0) player.state = "run";
+  else player.state = "idle";
+}
+
+
 function update() {
+  if (gameOver) return;
   player.velX = 0;
 
+  // MOVIMIENTO HORIZONTAL
   if (keys["ArrowRight"]) {
     player.velX = player.speed;
     player.direction = 1;
@@ -232,7 +288,7 @@ function update() {
     player.direction = -1;
   }
 
-  // DOBLE SALTO
+  // SALTO
   if (keys["Space"] && canJump && player.jumpCount < player.maxJumps) {
     player.velY = -player.jumpPower;
     player.jumpCount++;
@@ -245,24 +301,22 @@ function update() {
   player.velY += gravity;
   player.x += player.velX;
   player.y += player.velY;
-
   player.onGround = false;
 
   [...plataformas, ...suelo].forEach(p => {
-    if (
-      player.x < p.x + p.w &&
-      player.x + player.w > p.x &&
-      player.y < p.y + p.h &&
-      player.y + player.h > p.y
-    ) {
-      if (
-        prevY + player.h <= p.y &&
-        player.y + player.h >= p.y
-      ) {
+    if (colision(player, p)) {
+      if (prevY + player.h <= p.y) {
         player.y = p.y - player.h;
         player.velY = 0;
         player.onGround = true;
         player.jumpCount = 0;
+      } else if (prevY >= p.y + p.h) {
+        player.y = p.y + p.h;
+        player.velY = 0.5;
+      } else if (player.x + player.w - player.velX <= p.x) {
+        player.x = p.x - player.w;
+      } else if (player.x - player.velX >= p.x + p.w) {
+        player.x = p.x + p.w;
       }
     }
   });
@@ -272,12 +326,42 @@ function update() {
   camera.x = player.x - canvas.width / 2;
   if (camera.x < 0) camera.x = 0;
 
+  // Score  por distancia
+  score = Math.max(score, Math.floor(player.x / 10));
+
+  generarEnemigo();
+  enemigos.forEach(enemigo => {
+    enemigo.x -= enemigo.speed;
+
+    // Estado
+    enemigo.state = "walk";
+
+    // Colision
+    if (colision(player, enemigo)) {
+      enemigo.state = "attack";
+      perder();
+    }
+
+    // Animación
+    const anim = enemyAnimations[enemigo.state];
+    enemigo.frameTimer++;
+
+    if (enemigo.frameTimer >= frameSpeed) {
+      enemigo.frame++;
+      if (enemigo.frame > anim.end) enemigo.frame = anim.start;
+      enemigo.frameTimer = 0;
+    }
+  });
+  enemigos = enemigos.filter(e => e.x + e.w > camera.x - 200);  
+
   updateState();
   updateAnimation();
   updatePlataformas();
 }
 
 function resetGame() {
+  gameOver = false;
+  enemigos = [];
   player.x = 100;
   player.y = 100;
   player.velX = 0;
@@ -288,6 +372,9 @@ function resetGame() {
   lastPlatformX = 0;
   lastGroundX = 0;
   camera.x = 0;
+  for (let k in keys) delete keys[k];
+  bestScore = Math.max(bestScore, score);
+  score = 0;
 }
 
 function drawFondo() {
@@ -311,8 +398,21 @@ function drawPlayer() {
     -player.w/2, -player.h/2,
     player.w, player.h
   );
-
   ctx.restore();
+}
+
+function drawEnemies() {
+  if (!enemigoImg.complete) return;
+
+  enemigos.forEach(enemigo => {
+    ctx.drawImage(
+      enemigoImg,
+      enemigo.frame * ENEMY_WIDTH, 0,
+      ENEMY_WIDTH, ENEMY_HEIGHT,
+      enemigo.x - camera.x, enemigo.y,
+      enemigo.w, enemigo.h
+    );
+  });
 }
 
 function draw() {
@@ -321,7 +421,7 @@ function draw() {
   plataformas.forEach(p => {
     ctx.drawImage(plataformaImg, p.x - camera.x, p.y, p.w, p.h);
   });
-
+  drawEnemies();
   drawPlayer();
 }
 
