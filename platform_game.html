@@ -105,13 +105,17 @@ enemigoImg.src = "assets/enemigos.png";
 const vidaImg = new Image();
 vidaImg.src = "assets/vida.png";
 
+const coinImg = new Image();
+coinImg.src = "assets/coin.png";
+
+
 // Cámara
 const camera = { x: 0 };
 
 // Contador
 let score = 0;
 let bestScore = 0;
-let distanceScore = 0;
+//let distanceScore = 0;
 
 // Vida
 let vidas = 3;
@@ -121,6 +125,13 @@ const MAX_VIDAS = 3;
 let invencible = false;
 let invencibleTimer = 0;
 const INVENCIBLE_TIME = 120;
+
+// Coins
+let coins = 0;
+let coinsTotal = 0; // acumulador para regenerar vidas
+
+let monedas = [];
+
 
 // Jugador
 const player = {
@@ -193,15 +204,26 @@ document.addEventListener("keyup", e => {
 
 function generarSueloHasta(xObjetivo) {
   while (lastGroundX < xObjetivo) {
+
     suelo.push({
       x: lastGroundX,
       y: GROUND_Y,
       w: GROUND_SEGMENT_WIDTH,
       h: GROUND_HEIGHT
     });
+
+    // Coin en el suelo (30% por tramo)
+    if (Math.random() < 0.3) {
+      generarCoin(
+        lastGroundX + GROUND_SEGMENT_WIDTH / 2,
+        GROUND_Y - 30
+      );
+    }
+
     lastGroundX += GROUND_SEGMENT_WIDTH;
   }
 }
+
 
 function generarPlataforma() {
   const gapMin = 120;
@@ -220,6 +242,14 @@ function generarPlataforma() {
 
   plataformas.push({ x, y, w: width, h: height });
   lastPlatformX = x + width;
+
+  // Coin encima de la plataforma (50% de probabilidad)
+  if (Math.random() < 0.5) {
+    generarCoin(
+      x + width / 2 - 12,
+    y - 30
+    );
+  }
 }
 
 function generarEnemigo() {
@@ -323,6 +353,26 @@ function update() {
     player.direction = -1;
   }
 
+  monedas.forEach(coin => {
+  if (!coin.collected && colision(player, coin)) {
+    coin.collected = true;
+    coins++;
+    score += 1;
+    coinsTotal++;
+
+    // Cada 10 coins = +1 vida
+    if (coinsTotal % 10 === 0 && vidas < MAX_VIDAS) {
+      vidas++;
+    }
+  }
+});
+
+// Eliminar coins recogidas o fuera de cámara
+monedas = monedas.filter(
+  c => !c.collected && c.x + c.w > camera.x - 200
+);
+
+
   // SALTO
   if (keys["Space"] && canJump && player.jumpCount < player.maxJumps) {
     player.velY = -player.jumpPower;
@@ -362,8 +412,8 @@ function update() {
   if (camera.x < 0) camera.x = 0;
 
   // Score  por distancia
-  distanceScore = Math.max(score, Math.floor(player.x / 500));
-  score = distanceScore;
+  //distanceScore = Math.max(score, Math.floor(player.x / 500));
+  //score = distanceScore;
 
   generarEnemigo();
   enemigos.forEach(enemigo => {
@@ -422,10 +472,14 @@ function resetGame() {
   for (let k in keys) delete keys[k];
   bestScore = Math.max(bestScore, score);
   score = 0;
-  distanceScore = 0;
+  //distanceScore = 0;
   vidas = MAX_VIDAS;
   invencible = false;
   invencibleTimer = 0;
+   monedas = [];
+   coins = 0;
+   coinsTotal = 0;
+
 }
 
 function drawFondo() {
@@ -479,6 +533,9 @@ function drawScore() {
   ctx.textAlign = "left";
   ctx.fillText(`Puntuación: ${score}`, 20, 30);
   ctx.fillText(`Mejor Puntuación: ${bestScore}`, 20, 60);
+
+  ctx.fillText(`Coins: ${coins}`, 20, 90);
+
 }
 
 function drawLives() {
@@ -496,12 +553,37 @@ function drawLives() {
   }
 }
 
+function generarCoin(x, y) {
+  monedas.push({
+    x,
+    y,
+    w: 24,
+    h: 24,
+    collected: false
+  });
+}
+
+function drawCoins() {
+  monedas.forEach(coin => {
+    ctx.drawImage(
+      coinImg,
+      coin.x - camera.x,
+      coin.y,
+      coin.w,
+      coin.h
+    );
+  });
+}
+
+
+
 function draw() {
   drawFondo();
 
   plataformas.forEach(p => {
     ctx.drawImage(plataformaImg, p.x - camera.x, p.y, p.w, p.h);
   });
+  drawCoins();
   drawEnemies();
   drawPlayer();
   drawScore();
