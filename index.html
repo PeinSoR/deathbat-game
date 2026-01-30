@@ -103,6 +103,9 @@ plataformaImg.src = "assets/plataforma.png";
 const enemigoImg = new Image();
 enemigoImg.src = "assets/enemigos.png";
 
+const flyingEnemyImg = new Image();
+flyingEnemyImg.src = "assets/flying-enemy.png";
+
 const vidaImg = new Image();
 vidaImg.src = "assets/vida.png";
 
@@ -115,6 +118,41 @@ const RARE_COIN_SCALE = 2.0; // 200% más grande
 
 const sueloImg = new Image();
 sueloImg.src = "assets/suelo.jpg";
+
+// ====== SONIDOS ======
+const sounds = {
+  jump: new Audio("assets/sounds/jump.wav"),
+  hit: new Audio("assets/sounds/damage.wav"),
+  coin: new Audio("assets/sounds/coin.wav"),
+  music: new Audio("assets/sounds/music.flac"),
+  lifeup: new Audio("assets/sounds/life.wav")
+};
+
+// Configuración
+sounds.music.loop = true;
+sounds.music.volume = 0.4;
+
+sounds.jump.volume = 0.6;
+sounds.hit.volume = 0.7;
+sounds.coin.volume = 0.5;
+
+// Para evitar retrasos al reproducir
+Object.values(sounds).forEach(s => s.load());
+
+// Helper para reproducir sin solapamientos raros
+function playSound(sound) {
+  sound.currentTime = 0;
+  sound.play();
+}
+
+let musicStarted = false;
+
+document.addEventListener("keydown", () => {
+  if (!musicStarted) {
+    sounds.music.play();
+    musicStarted = true;
+  }
+}, { once: true });
 
 // multiplicador de velocidad del juego
 let gameSpeed = 1;
@@ -166,7 +204,7 @@ const animations = {
   jump: { start: 1, end: 7 }
 };
 
-// Animaciones enemigos
+// Enemigos del suelo
 const enemyAnimations = {
   walk:   { start: 0, end: 15 },
   idle:   { start: 16, end: 25 },
@@ -178,6 +216,14 @@ const frameSpeed = 5;
 
 const FRAME_WIDTH = 48;
 const FRAME_HEIGHT = 48;
+
+// Enemigos voladores
+let flyingEnemies = [];
+
+const FLYING_FRAMES = 16;
+const FLYING_WIDTH = 48;
+const FLYING_HEIGHT = 48;
+const FLYING_FRAME_SPEED = 4;
 
 // Plataformas
 let plataformas = [];
@@ -281,6 +327,27 @@ function generarEnemigo() {
   }
 }
 
+function generarEnemigoVolador() {
+  if (Math.random() < 0.005 && plataformas.length > 0) {
+    const plataforma = plataformas[Math.floor(Math.random() * plataformas.length)];
+
+    flyingEnemies.push({
+      x: camera.x + canvas.width +50,
+      baseY: plataforma.y - 60,
+      y: plataforma.y - 60,
+      w: FLYING_WIDTH,
+      h: FLYING_HEIGHT,
+      speed: 1.5,
+      amplitude: 20,
+      angle: Math.random() * Math.PI * 2,
+
+      frame: 0,
+      frameTimer: 0,
+      dead: false
+    });
+  }
+}
+
 function updatePlataformas() {
   const limiteGeneracion = camera.x + canvas.width * 2;
 
@@ -316,7 +383,7 @@ function colision(a, b) {
 
 function perder() {
   if (gameOver) return;
-
+  playSound(sounds.hit);
   vidas--;
 
   if (vidas <= 0) {
@@ -375,12 +442,14 @@ function update() {
     coins += coin.value;
     score += coin.value;      
     coinsTotal += coin.value;
+    playSound(sounds.coin);
 
 // Cada 10 coins = +1 vida
     if (coinsTotal >= 10) {
       const vidasGanadas = Math.floor(coinsTotal / 10);
       vidas = Math.min(MAX_VIDAS, vidas + vidasGanadas);
       coinsTotal %= 10;
+      playSound(sounds.lifeup);
     }
   }
 });
@@ -391,12 +460,14 @@ monedas = monedas.filter(
 );
 
 
-  // SALTO
+  // Salto
   if (keys["Space"] && canJump && player.jumpCount < player.maxJumps) {
     player.velY = -player.jumpPower;
     player.jumpCount++;
     player.onGround = false;
     canJump = false;
+
+    playSound(sounds.jump);
   }
 
   const prevY = player.y;
@@ -453,9 +524,15 @@ monedas = monedas.filter(
         if (!invencible) {
         enemigo.state = "attack";
         perder();
-}
+        }
+      }
     }
-    }
+
+
+// Limpieza de enemigos voladores
+flyingEnemies = flyingEnemies.filter(
+  e => !e.dead && e.x + e.w > camera.x - 200
+);
 
     // Animación
     const anim = enemyAnimations[enemigo.state];
@@ -468,6 +545,43 @@ monedas = monedas.filter(
     }
   });
   enemigos = enemigos.filter(e => !e.dead && e.x + e.w > camera.x - 200);  
+
+      // Enemigos voladores
+generarEnemigoVolador();
+
+flyingEnemies.forEach(enemy => {
+  enemy.x -= enemy.speed * gameSpeed;
+
+  // Movimiento ondulado
+  enemy.angle += 0.05;
+  enemy.y = enemy.baseY + Math.sin(enemy.angle) * enemy.amplitude;
+
+  // Colisión con jugador
+  if (colision(player, enemy)) {
+    const playerBottom = player.y + player.h;
+
+    // Si el jugador cae encima → lo mata
+    if (
+      player.velY > 0 &&
+      playerBottom - player.velY <= enemy.y + 10
+    ) {
+      enemy.dead = true;
+      player.velY = -player.jumpPower / 2;
+      score += 15;
+    }
+    // Si no → daño
+    else if (!invencible) {
+      perder();
+    }
+  }
+
+  // Animación
+  enemy.frameTimer++;
+  if (enemy.frameTimer >= FLYING_FRAME_SPEED) {
+    enemy.frame = (enemy.frame + 1) % FLYING_FRAMES;
+    enemy.frameTimer = 0;
+  }
+});
 
   updateState();
   updateAnimation();
@@ -498,7 +612,8 @@ function resetGame() {
   coins = 0;
   coinsTotal = 0;
   gameSpeed = 1;
-
+  sounds.music.currentTime = 0;
+  sounds.music.play();
 }
 
 function drawFondo() {
@@ -541,6 +656,24 @@ function drawEnemies() {
       ENEMY_WIDTH, ENEMY_HEIGHT,
       enemigo.x - camera.x, enemigo.y,
       enemigo.w, enemigo.h
+    );
+  });
+}
+
+function drawFlyingEnemies() {
+  if (!flyingEnemyImg.complete) return;
+
+  flyingEnemies.forEach(enemy => {
+    ctx.drawImage(
+      flyingEnemyImg,
+      enemy.frame * FLYING_WIDTH,
+      0,
+      FLYING_WIDTH,
+      FLYING_HEIGHT,
+      enemy.x - camera.x,
+      enemy.y,
+      enemy.w,
+      enemy.h
     );
   });
 }
@@ -625,6 +758,7 @@ function draw() {
   });
   drawCoins();
   drawEnemies();
+  drawFlyingEnemies();
   drawPlayer();
   drawScore();
   drawLives();
