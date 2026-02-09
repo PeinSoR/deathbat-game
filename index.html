@@ -626,24 +626,25 @@ function drawFondo() {
 }
 
 function drawPlayer() {
+  if (!playerImg.complete) return;
+
+  if (invencible && Math.floor(invencibleTimer / 5) % 2 === 0) return;
+
   ctx.save();
-  ctx.translate(player.x - camera.x + player.w/2, player.y + player.h/2);
-  ctx.scale(player.direction, 1);
+  try {
+    ctx.translate(player.x - camera.x + player.w / 2, player.y + player.h / 2);
+    ctx.scale(player.direction, 1);
 
-  // Parpadeo si es invencible
-  if (invencible && Math.floor(invencibleTimer / 5) % 2 === 0) {
+    ctx.drawImage(
+      playerImg,
+      frame * FRAME_WIDTH, 0,
+      FRAME_WIDTH, FRAME_HEIGHT,
+      -player.w / 2, -player.h / 2,
+      player.w, player.h
+    );
+  } finally {
     ctx.restore();
-    return;
   }
-
-  ctx.drawImage(
-    playerImg,
-    frame * FRAME_WIDTH, 0,
-    FRAME_WIDTH, FRAME_HEIGHT,
-    -player.w/2, -player.h/2,
-    player.w, player.h
-  );
-  ctx.restore();
 }
 
 function drawEnemies() {
@@ -687,6 +688,8 @@ function drawScore() {
   ctx.fillText(`Mejor Puntuación: ${bestScore}`, 20, 60);
 
   ctx.fillText(`Coins: ${coins}`, 20, 90);
+
+  ctx.restore();
 
 }
 
